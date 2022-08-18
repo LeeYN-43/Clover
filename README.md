@@ -1,12 +1,14 @@
 # Clover
 
 Offical PyTorch implementation of Clover: Towards A Unified Video-Language Alignment and Fusion Model
-[**[Arxiv]**](https://arxiv.org/abs/2207.07885)
+[**[arXiv]**](https://arxiv.org/abs/2207.07885)
 
 # To Do
 
-- [ ] Release pretrain code
+- [x] Release pretrain code
+- [x] Release pretrain config
 - [ ] Release pretrain model
-- [ ] Release finetune code
+- [x] Release finetune code
+- [x] Release pretrain config
 - [ ] Release finetune model
 

@@ -21,7 +21,6 @@ class CloverFinetune(BaseRecognizer):
                  answer_mask=False,
                  answer_cls=False,
                  qa_head=None,
-                 vision_q_head=None,
                  from_scratch=False,
                  text_vocab_size=30522,
                  separate_test=False,
@@ -36,26 +35,20 @@ class CloverFinetune(BaseRecognizer):
         self.task = task
         if self.task == 'retrieval':
             self.ssl_head = build_head(ssl_head)
-            self.mlm_ssl_T_head = build_head(vision_q_head) if vision_q_head is not None else None
             self.loss_func = build_loss(loss_type)
         elif self.task == 'video_qa' or self.task == "FIB":
             self.answer_mask = answer_mask
             self.answer_cls = answer_cls
             self.itm_head = build_head(itm_head) if itm_head is not None else None
-            self.mlm_ssl_T_head = build_head(vision_q_head) if vision_q_head is not None else None
             self.qa_head = build_head(qa_head) if qa_head is not None else None
             self.loss_func = build_loss(loss_type)
             self.loss_type = loss_type['type']
-        elif self.task == 'video_qa_ret':
-            self.ssl_head = build_head(ssl_head)
-            self.mlm_ssl_T_head = build_head(vision_q_head)
-            self.loss_func = build_loss(loss_type)
         else:
             raise NotImplementedError(f"must have head to do downstream finetuning")
 
 
     @auto_fp16(apply_to='imgs')
-    def extract_visual_feat(self, imgs, token_ids=None, segment_ids=None, input_mask=None):
+    def extract_visual_feat(self, imgs):
         if (hasattr(self.backbone, 'features')
                 and self.backbone_from == 'torchvision'):
             visual_emb = self.backbone.features(imgs)
@@ -132,18 +125,6 @@ class CloverFinetune(BaseRecognizer):
             qa_loss = self.loss_func(final_output, final_label.view(-1))
             losses['qa_loss'] = qa_loss
 
-        elif self.task == 'video_qa_ret':
-            B, D, T, H, W = visual_token.shape
-            visual_token = visual_token.view(B, D, T, -1).permute(0, 2, 3, 1)
-            ans_ids = ans_ids.reshape((-1, ) + ans_ids.shape[2:])
-            ans_mask = ans_mask.reshape((-1, ) + ans_mask.shape[2:])
-            output = self.multimodal_backbone(visual_token=visual_token, text_input_mask=input_mask, text_input_embeds=text_out_last_hidden_state)
-            v_q_out = output['t_last_hidden_state'][:, 0] 
-            ans_out = self.text_backbone(ans_ids, ans_mask)['last_hidden_state']
-            v_q_emb = self.mlm_ssl_T_head(v_q_out)
-            ans_emb = self.ssl_head.forward_text(ans_out)
-            nce_loss = self.loss_func(v_q_emb, ans_emb)
-            losses['video_qa_mc_ret_loss'] = nce_loss
 
 
         return losses
@@ -198,8 +179,7 @@ class CloverFinetune(BaseRecognizer):
                     itm_output = output['t_last_hidden_state'][:, 0]
                 if self.itm_head is not None:
                     itm_output = self.itm_head(itm_output)
-                if self.mlm_ssl_T_head is not None:
-                    itm_output = self.mlm_ssl_T_head(itm_output)
+
             else:
                 all_cls_emb = output['last_hidden_state'][:, 0]
                 itm_output = self.itm_head(all_cls_emb)
@@ -212,17 +192,7 @@ class CloverFinetune(BaseRecognizer):
             
             itm_output_all = {}
             itm_output_all['result'] = qa_output.to(torch.float32)
-        elif self.task == 'video_qa_ret':
-            B, D, T, H, W = visual_token.shape
-            visual_token = visual_token.view(B, D, T, -1).permute(0, 2, 3, 1)
-            ans_ids = ans_ids.reshape((-1, ) + ans_ids.shape[2:])
-            ans_mask = ans_mask.reshape((-1, ) + ans_mask.shape[2:])
-            output = self.multimodal_backbone(visual_token=visual_token, text_input_mask=input_mask, text_input_embeds=text_out_last_hidden_state)
-            v_q_out = output['t_last_hidden_state'][:, 0] 
-            ans_out = self.text_backbone(ans_ids, ans_mask)['last_hidden_state']
-            v_q_emb = self.mlm_ssl_T_head(v_q_out)
-            ans_emb = self.ssl_head.forward_text(ans_out)
-            return v_q_emb.float(), ans_emb.float()        
+       
         
         else:
             raise NotImplementedError("not implement the finetune test method")
