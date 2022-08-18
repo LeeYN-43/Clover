@@ -4,7 +4,6 @@ _base_ = [
     '../_base_/default_runtime.py'
 ]
 # model settings
-num_classes = 56
 weight_decay = 0.005
 videos_per_gpu = 32
 num_gpus = 8
