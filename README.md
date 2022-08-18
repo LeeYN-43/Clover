@@ -16,6 +16,8 @@ Offical PyTorch implementation of Clover: Towards A Unified Video-Language Align
 - [x] Release finetune code
 - [x] Release finetune configs
 - [ ] Release finetune model
+- [ ] Release installation and usage command
+
 
 # Citation
 If you find this work useful in your research, please consider cite:
