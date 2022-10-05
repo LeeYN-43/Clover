@@ -139,12 +139,7 @@ class SwinTransformer3D(nn.Module):
             logger (logging.Logger): The logger used to print
                 debugging infomation.
         """
-        from mmaction.utils import hload_torch
-
-        if self.pretrained.startswith('hdfs://'):
-            checkpoint = hload_torch(self.pretrained, map_location='cpu')
-        else:
-            checkpoint = torch.load(self.pretrained, map_location='cpu')
+        checkpoint = torch.load(self.pretrained, map_location='cpu')
 
         state_dict = checkpoint['state_dict']
 

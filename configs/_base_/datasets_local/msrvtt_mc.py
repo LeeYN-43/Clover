@@ -12,7 +12,7 @@ pretrained_texttokenizer='bert-base-uncased'
 img_norm_cfg = dict(
     mean=[103.53, 116.28, 123.675], std=[57.375, 57.12, 58.395], to_rgb=False)   
 train_pipeline = [
-    dict(type='HDFSDecordInit'),
+    dict(type='DecordInit'),
     dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8),
     dict(type='DecordDecode'),
     dict(type='Resize', scale=(-1, 256)),

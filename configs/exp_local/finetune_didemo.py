@@ -71,10 +71,11 @@ model = dict(
     train_cfg=dict(aux_info=aux_info),
     test_cfg=dict(feature_extraction=False,))
 data = dict(
-    train=dict(
-        ds_num_readers=2,
-        batch_sizes=[videos_per_gpu]),
-    val=dict(
+    train_dataloader=dict(
+        videos_per_gpu=videos_per_gpu,
+        workers_per_gpu=4,
+        ),
+    val_dataloader=dict(
         videos_per_gpu=videos_per_gpu,
         workers_per_gpu=4,
         ),

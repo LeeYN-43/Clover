@@ -168,7 +168,7 @@ def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
         gpu_collect = True
 
     if gpu_collect:
-        results = collect_results_gpu(results, size=None)  # 对于用ArnoldDataset从HDFS读取，len(data_loader)是不对的,改为len(data_loader.video_infos)
+        results = collect_results_gpu(results, size=None) 
     else:
         results = collect_results_cpu(results, size=None, tmpdir=tmpdir)
 
@@ -250,8 +250,8 @@ def multi_gpu_test_retrieval(model, data_loader, tmpdir=None, gpu_collect=False,
         gpu_collect = True
     s_t = time.time()
     if gpu_collect:
-        all_video_embd = collect_results_gpu(all_video_embd, size=None)  # 对于用ArnoldDataset从HDFS读取，len(data_loader)是不对的,改为len(data_loader.video_infos)
-        all_text_embd = collect_results_gpu(all_text_embd, size=None)  # 对于用ArnoldDataset从HDFS读取，len(data_loader)是不对的,改为len(data_loader.video_infos)
+        all_video_embd = collect_results_gpu(all_video_embd, size=None)  
+        all_text_embd = collect_results_gpu(all_text_embd, size=None) 
     else:
         all_video_embd = collect_results_cpu(all_video_embd, size=None, tmpdir=tmpdir)  
         all_text_embd = collect_results_cpu(all_text_embd, size=None, tmpdir=tmpdir)  
@@ -351,8 +351,8 @@ def multi_gpu_test_retrieval_varied(model, data_loader, tmpdir=None, gpu_collect
         gpu_collect = True
     s_t = time.time()
     if gpu_collect:
-        all_video_embd = collect_results_gpu(all_video_embd, size=None)  # 对于用ArnoldDataset从HDFS读取，len(data_loader)是不对的,改为len(data_loader.video_infos)
-        all_text_embd = collect_results_gpu(all_text_embd, size=None)  # 对于用ArnoldDataset从HDFS读取，len(data_loader)是不对的,改为len(data_loader.video_infos)
+        all_video_embd = collect_results_gpu(all_video_embd, size=None)  
+        all_text_embd = collect_results_gpu(all_text_embd, size=None) 
     else:
         all_video_embd = collect_results_cpu(all_video_embd, size=None, tmpdir=tmpdir)  
         all_text_embd = collect_results_cpu(all_text_embd, size=None, tmpdir=tmpdir)  
@@ -443,7 +443,7 @@ def multi_gpu_test_itm_finetune(model, data_loader, tmpdir=None, gpu_collect=Fal
     if world_size // torch.cuda.device_count() > 1:
         gpu_collect = True
     if gpu_collect:
-        results = collect_results_gpu(results, size=None)  # 对于用ArnoldDataset从HDFS读取，len(data_loader)是不对的,改为len(data_loader.video_infos)
+        results = collect_results_gpu(results, size=None) 
         anses = collect_results_gpu(anses, size=None)
     else:
         results = collect_results_cpu(results, size=None, tmpdir=tmpdir)
@@ -772,7 +772,7 @@ class MyEvalHook(Hook):
             runner.meta['hook_msgs']['best_score'] = best_score
 
             if self.best_ckpt_path and hexists(self.best_ckpt_path):
-                hdelete(self.best_ckpt_path)  # 兼容hdfs
+                hdelete(self.best_ckpt_path)  
 
             best_ckpt_name = f'{basename}_best_{self.key_indicator}_{current}.pth'
             self.best_ckpt_path = osp.join(work_dir, best_ckpt_name)

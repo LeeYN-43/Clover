@@ -71,20 +71,22 @@ model = dict(
     train_cfg=dict(aux_info=aux_info),
     test_cfg=dict(feature_extraction=False,))
 data = dict(
-    train=dict(
-        ds_num_readers=2,
-        videos_per_gpu=videos_per_gpu),
-    val=dict(
-        is_mc=True, is_qa=False,
+    train_dataloader=dict(
         videos_per_gpu=videos_per_gpu,
         workers_per_gpu=4,
         ),
+    val_dataloader=dict(
+        videos_per_gpu=videos_per_gpu,
+        workers_per_gpu=4,
+        ),
+    val=dict(is_mc=True, is_qa=False),
     test=dict(is_mc=True, is_qa=False),
     test_dataloader=dict(
         videos_per_gpu=videos_per_gpu,
         workers_per_gpu=4,
         )
     )
+
 evaluation = dict(interval=1, metrics=['video_qa_mc'], gpu_collect=True, test_fn='recall_for_video_text_retrieval')
 # optimizer
 optimizer = dict(

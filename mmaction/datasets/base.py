@@ -187,7 +187,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
             raise TypeError(f'results must be a list, but got {type(results)}')
         assert len(results) == len(self.video_infos), (  # modified  , len(self) -> len(self.video_infos)
             f'The length of results is not equal to the dataset len: '
-            f'{len(results)} != {len(self.video_infos)}')  # comment out   for ArnoldDataset
+            f'{len(results)} != {len(self.video_infos)}')  # comment out 
 
         metrics = metrics if isinstance(metrics, (list, tuple)) else [metrics]
         # allowed_metrics = [

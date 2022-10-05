@@ -64,12 +64,22 @@ model = dict(
         type="CrossEntropyLoss",
         ),
     train_cfg=dict(aux_info=aux_info))
+
 data = dict(
-    train=dict(
-        ds_num_readers=3,
-        batch_sizes=[videos_per_gpu]),
-    val=dict(batch_sizes=[videos_per_gpu*2]),
+    train_dataloader=dict(
+        videos_per_gpu=videos_per_gpu,
+        workers_per_gpu=4,
+        ),
+    val_dataloader=dict(
+        videos_per_gpu=videos_per_gpu,
+        workers_per_gpu=4,
+        ),
+    test_dataloader=dict(
+        videos_per_gpu=videos_per_gpu,
+        workers_per_gpu=4,
+        ),
     )
+    
 evaluation = dict(interval=1, metrics=['video_qa_oe'], gpu_collect=True, test_fn='use_itm_head_fn')
 # optimizer
 optimizer = dict(

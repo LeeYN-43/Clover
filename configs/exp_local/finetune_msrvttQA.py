@@ -64,11 +64,13 @@ model = dict(
         type="CrossEntropyLoss",
         ),
     train_cfg=dict(aux_info=aux_info))
+
 data = dict(
-    train=dict(
-        ds_num_readers=3,
-        batch_sizes=[videos_per_gpu]),
-    val=dict(
+    train_dataloader=dict(
+        videos_per_gpu=videos_per_gpu,
+        workers_per_gpu=4,
+        ),
+    val_dataloader=dict(
         videos_per_gpu=videos_per_gpu,
         workers_per_gpu=4,
         ),

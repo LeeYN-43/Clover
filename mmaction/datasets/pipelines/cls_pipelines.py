@@ -197,7 +197,7 @@ class CLSLoadImageFromFile(object):
         else:
             filename = results['img_info']['filename']
 
-        if 'img_bin' in results:  # support read from HDFS
+        if 'img_bin' in results: 
             img_bytes = results['img_bin']
         else:
             if self.file_client is None:
