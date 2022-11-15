@@ -71,11 +71,11 @@ data = dict(
         workers_per_gpu=4,
         ),
     val_dataloader=dict(
-        videos_per_gpu=videos_per_gpu,
+        videos_per_gpu=4,
         workers_per_gpu=4,
         ),
     test_dataloader=dict(
-        videos_per_gpu=videos_per_gpu,
+        videos_per_gpu=4,
         workers_per_gpu=4,
         ),
     )

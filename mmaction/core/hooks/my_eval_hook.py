@@ -4,7 +4,7 @@ from math import inf
 import time
 import numpy as np
 from typing import Sequence
-
+import pickle
 import torch
 import torch.distributed as dist
 from torch.nn.modules.batchnorm import _BatchNorm
@@ -15,180 +15,6 @@ from mmcv.runner import Hook
 from mmcv.runner import get_dist_info
 from mmcv.engine import collect_results_gpu, collect_results_cpu
 from mmaction.utils import hdelete, hexists
-
-
-def single_gpu_test(model, data_loader):
-    """Test model with a single gpu.
-
-    This method tests model with a single gpu and displays test progress bar.
-
-    Args:
-        model (nn.Module): Model to be tested.
-        data_loader (nn.Dataloader): Pytorch data loader.
-
-    Returns:
-        list: The prediction results.
-    """
-    model.eval()
-    results = []
-    indices = []
-    prog_bar = mmcv.ProgressBar(len(data_loader))
-    for i, data in enumerate(data_loader.data_iter):  # modified  , replace "data_loader.dataset" with data_loader
-        # index = data.pop('index').cpu().numpy().tolist()
-        # indices.extend(index)
-        with torch.no_grad():
-            result = model(return_loss=False, **data)
-        results.extend(result)
-
-        batch_size = len(result)
-        for _ in range(batch_size):
-            prog_bar.update()
-
-        if i >= (len(data_loader) - 1):
-            break
-
-    indices, unique_idx = np.unique(np.array(indices), return_index=True)
-    arg_indices = np.argsort(indices, kind='mergesort')
-    unique_idx = unique_idx[arg_indices]
-    results = [results[idx] for idx in unique_idx]
-
-    if len(results) != len(data_loader.video_infos):
-        print('Warning: len(results) != len(data_loader.video_infos)')
-        indices = indices[arg_indices].tolist()
-        print(f'sorted indices: {indices}')
-        for i, idx in enumerate(indices):
-            if i != idx:
-                print(f'i, idx: {i, idx}')
-        data_loader.terminate()
-        raise ValueError
-    return results
-
-def single_gpu_test_retrieval(model, data_loader):
-    """Test model with a single gpu.
-    --- Add by lyn ---
-    This method tests model with a single gpu and displays test progress bar
-    and calculate video-text retrieval scores. 
-
-    Args:
-        model (nn.Module): Model to be tested.
-        data_loader (nn.Dataloader): Pytorch data loader.
-
-    Returns:
-        dict: The prediction results.
-    """
-    model.eval()
-    results = {}
-    all_video_embd = []
-    all_text_embd = []
-    indices = []
-    prog_bar = mmcv.ProgressBar(len(data_loader))
-    for i, data in enumerate(data_loader.data_iter):  # modified  , replace "data_loader.dataset" with data_loader
-        index = data.pop('index').cpu().numpy().tolist()
-        indices.extend(index)
-        with torch.no_grad():
-            video_embd, text_embd = model(return_loss=False, **data)
-            text_embd = text_embd.cpu().numpy()
-            if video_embd.shape[0] != text_embd.shape[0]:
-                video_embd = video_embd.view(text_embd.shape[0], -1, text_embd.shape[1])
-                video_embd = video_embd.mean(dim=1)
-            video_embd = video_embd.cpu().numpy()
-            all_video_embd.extend(video_embd)
-            all_text_embd.extend(text_embd)
-
-        batch_size = len(all_video_embd)
-        # for _ in range(batch_size):
-        prog_bar.update()
-
-        if i >= (len(data_loader) - 1):
-            break
-    indices, unique_idx = np.unique(np.array(indices), return_index=True)
-    arg_indices = np.argsort(indices, kind='mergesort')
-    unique_idx = unique_idx[arg_indices]
-    all_video_embd = [all_video_embd[idx] for idx in unique_idx]
-    all_text_embd = [all_text_embd[idx] for idx in unique_idx]
-    if len(all_video_embd) != len(data_loader.video_infos):
-        print('Warning: len(results) != len(data_loader.video_infos)')
-        indices = indices[arg_indices].tolist()
-        print(f'sorted indices: {indices}')
-        for i, idx in enumerate(indices):
-            if i != idx:
-                print(f'i, idx: {i, idx}')
-        data_loader.terminate()
-        raise ValueError
-        
-    results['video_embd'] = all_video_embd
-    results['text_embd'] = all_text_embd
-    return results    
-
-
-def multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
-    """Test model with multiple gpus.
-
-    This method tests model with multiple gpus and collects the results
-    under two different modes: gpu and cpu modes. By setting
-    ``gpu_collect=True``, it encodes results to gpu tensors and use gpu
-    communication for results collection. On cpu mode it saves the results on
-    different gpus to ``tmpdir`` and collects them by the rank 0 worker.
-
-    Args:
-        model (nn.Module): Model to be tested.
-        data_loader (nn.Dataloader): Pytorch data loader.
-        tmpdir (str): Path of directory to save the temporary results from
-            different gpus under cpu mode.
-        gpu_collect (bool): Option to use either gpu or cpu to collect results.
-
-    Returns:
-        list: The prediction results.
-    """
-    model.eval()
-    results = []
-    indices = []
-    rank, world_size = get_dist_info()
-    if rank == 0:
-        prog_bar = mmcv.ProgressBar(len(data_loader))  # modified  , replace "data_loader.dataset" with data_loader
-    time.sleep(2)  # This line can prevent deadlock problem in some cases.
-    for i, data in enumerate(data_loader.data_iter):
-        index = data.pop('index').cpu().numpy().tolist()
-        indices.extend(index)
-        with torch.no_grad():
-            result = model(return_loss=False, **data)
-        results.extend(result)
-        if rank == 0:
-            # batch_size = len(result)
-            # batch_size_all = batch_size * world_size
-            # if batch_size_all + prog_bar.completed > len(data_loader):
-            #     batch_size_all = len(data_loader) - prog_bar.completed
-            # for _ in range(batch_size_all):
-            prog_bar.update()
-        if i >= (len(data_loader) - 1):
-            break
-
-    # collect results from all ranks
-    if world_size // torch.cuda.device_count() > 1:
-        gpu_collect = True
-
-    if gpu_collect:
-        results = collect_results_gpu(results, size=None) 
-    else:
-        results = collect_results_cpu(results, size=None, tmpdir=tmpdir)
-
-    indices = collect_results_gpu(indices, size=None)
-    if rank == 0:
-        indices, unique_idx = np.unique(np.array(indices), return_index=True)
-        arg_indices = np.argsort(indices, kind='mergesort')
-        unique_idx = unique_idx[arg_indices]
-        results = [results[idx] for idx in unique_idx]
-
-        if len(results) != len(data_loader.video_infos):
-            print('Warning: len(results) != len(data_loader.video_infos)')
-            indices = indices[arg_indices].tolist()
-            print(f'sorted indices: {indices}')
-            for i, idx in enumerate(indices):
-                if i != idx:
-                    print(f'i, idx: {i, idx}')
-            data_loader.terminate()
-            raise ValueError
-    return results
 
 
 def multi_gpu_test_retrieval(model, data_loader, tmpdir=None, gpu_collect=False, separate=False):
@@ -388,6 +214,104 @@ def multi_gpu_test_retrieval_varied(model, data_loader, tmpdir=None, gpu_collect
     # results['text'] = texts
     return results
 
+def multi_gpu_test_action_recognition(model, data_loader, tmpdir=None, gpu_collect=False, separate=False):
+    """Test model with multiple gpus.
+
+    This method tests model with multiple gpus and collects the results
+    under two different modes: gpu and cpu modes. By setting
+    ``gpu_collect=True``, it encodes results to gpu tensors and use gpu
+    communication for results collection. On cpu mode it saves the results on
+    different gpus to ``tmpdir`` and collects them by the rank 0 worker.
+
+    Args:
+        model (nn.Module): Model to be tested.
+        data_loader (nn.Dataloader): Pytorch data loader.
+        tmpdir (str): Path of directory to save the temporary results from
+            different gpus under cpu mode.
+        gpu_collect (bool): Option to use either gpu or cpu to collect results.
+
+    Returns:
+        list: The prediction results.
+    """
+    model.eval()
+    results = {}
+    all_video_embd = []
+    all_text_embd = []
+    indices = []
+    labels = []
+    metas = []
+    rank, world_size = get_dist_info()
+    if rank == 0:
+        prog_bar = mmcv.ProgressBar(len(data_loader))  # modified  , replace "data_loader.dataset" with data_loader
+    time.sleep(2)  # This line can prevent deadlock problem in some cases.
+    for i, data in enumerate(data_loader):
+        index = data.pop('index').cpu().numpy().tolist()
+        label = data.pop('label').cpu().numpy().tolist()
+        labels.extend(label)
+        indices.extend(index)
+        if 'img_metas' in data:
+            imgs_metas = data.pop('img_metas').data[0]         
+            metas.extend(imgs_metas)
+
+        with torch.no_grad():
+            video_embd, text_embd = model(return_loss=False, **data)
+            if video_embd.shape[0] > text_embd.shape[0]:
+                video_embd = video_embd.view(text_embd.shape[0], -1, text_embd.shape[1])
+                video_embd = video_embd.mean(dim=1)
+            elif video_embd.shape[0] < text_embd.shape[0]:
+                # for msrvtt mc
+                text_embd = text_embd.view(video_embd.shape[0], -1, text_embd.shape[1])
+
+            text_embd = text_embd.cpu().numpy()
+            video_embd = video_embd.cpu().numpy()
+        all_video_embd.extend(video_embd)
+        all_text_embd.extend(text_embd)
+        if rank == 0:
+            prog_bar.update()
+        if i >= (len(data_loader) - 1):
+            break
+
+    # collect results from all ranks
+    if world_size // torch.cuda.device_count() > 1:
+        gpu_collect = True
+    s_t = time.time()
+    if gpu_collect:
+        all_video_embd = collect_results_gpu(all_video_embd, size=None)  
+        all_text_embd = collect_results_gpu(all_text_embd, size=None)
+    else:
+        all_video_embd = collect_results_cpu(all_video_embd, size=None, tmpdir=tmpdir)  
+        all_text_embd = collect_results_cpu(all_text_embd, size=None, tmpdir=tmpdir)  
+
+    indices = collect_results_gpu(indices, size=None)
+    labels = collect_results_gpu(labels, size=None)
+    if len(metas) != 0:
+        metas = collect_results_gpu(metas, size=None)
+
+    if rank == 0:
+        print('\n')
+        print("collect_time: ", time.time() - s_t)
+        indices, unique_idx = np.unique(np.array(indices), return_index=True)
+        arg_indices = np.argsort(indices, kind='mergesort')
+        unique_idx = unique_idx[arg_indices]
+        all_video_embd = [all_video_embd[idx] for idx in unique_idx]
+        all_text_embd = [all_text_embd[idx] for idx in unique_idx]
+        if len(metas) != 0:
+            metas = [metas[idx] for idx in unique_idx]
+        if len(all_video_embd) != len(data_loader.dataset.video_infos):
+            print('Warning: len(results) != len(data_loader.video_infos)')
+            indices = indices[arg_indices].tolist()
+            print(f'sorted indices: {indices}')
+            for i, idx in enumerate(indices):
+                if i != idx:
+                    print(f'i, idx: {i, idx}')
+            data_loader.terminate()
+            raise ValueError
+
+    results['video_embd'] = all_video_embd
+    results['text_embd'] = all_text_embd
+    results['metas'] = metas
+    results['labels'] = labels
+    return results
 
 
 def multi_gpu_test_itm_finetune(model, data_loader, tmpdir=None, gpu_collect=False, separate=False):
@@ -414,6 +338,7 @@ def multi_gpu_test_itm_finetune(model, data_loader, tmpdir=None, gpu_collect=Fal
     anses = []
     indices = []
     metas = []
+    ans = None
     rank, world_size = get_dist_info()
     if rank == 0:
         prog_bar = mmcv.ProgressBar(len(data_loader))  # modified  , replace "data_loader.dataset" with data_loader
@@ -422,8 +347,8 @@ def multi_gpu_test_itm_finetune(model, data_loader, tmpdir=None, gpu_collect=Fal
         index = data.pop('index').cpu().numpy().tolist()
         indices.extend(index)
         if 'img_metas' in data:
-            imgs_metas = data.pop('img_metas').data[0]         
-            metas.extend(imgs_metas)
+            imgs_metas = data.pop('img_metas').data[0]
+            metas.extend(imgs_metas)    
         with torch.no_grad():
             result_all = model(return_loss=False, **data)
             result = result_all['result']
@@ -461,15 +386,15 @@ def multi_gpu_test_itm_finetune(model, data_loader, tmpdir=None, gpu_collect=Fal
         anses = [anses[idx] for idx in unique_idx]
         if len(metas) != 0:
             metas = [metas[idx] for idx in unique_idx]
-        if len(results) != len(data_loader.dataset.video_infos):
-            print('Warning: len(results) != len(data_loader.video_infos)')
-            indices = indices[arg_indices].tolist()
-            print(f'sorted indices: {indices}')
-            for i, idx in enumerate(indices):
-                if i != idx:
-                    print(f'i, idx: {i, idx}')
-            data_loader.terminate()
-            raise ValueError
+        # if len(results) != len(data_loader.dataset.video_infos):
+        #     print('Warning: len(results) != len(data_loader.video_infos)')
+        #     indices = indices[arg_indices].tolist()
+        #     print(f'sorted indices: {indices}')
+        #     for i, idx in enumerate(indices):
+        #         if i != idx:
+        #             print(f'i, idx: {i, idx}')
+        #     data_loader.terminate()
+        #     raise ValueError
     if metas is None or len(metas) == 0:
         return (results, anses)
     else:
@@ -896,6 +821,8 @@ class MyDistEvalHook(MyEvalHook):
             test_fn = multi_gpu_test_retrieval
         elif test_fn == 'use_itm_head_fn':
             test_fn = multi_gpu_test_itm_finetune
+        elif test_fn == 'zeroshot_action_recognition':
+            test_fn = multi_gpu_test_action_recognition
 
         super().__init__(
             dataloader,

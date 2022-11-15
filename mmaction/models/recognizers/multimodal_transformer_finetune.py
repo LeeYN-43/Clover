@@ -4,8 +4,6 @@ import torch.nn.functional as F
 from mmaction.core.hooks.fp16_utils import auto_fp16
 from ..builder import RECOGNIZERS, build_backbone, build_head, build_loss
 from .base import BaseRecognizer
-import random
-from einops import rearrange
 
 
 @RECOGNIZERS.register_module()
@@ -108,8 +106,7 @@ class CloverFinetune(BaseRecognizer):
                     itm_output = output['t_last_hidden_state'][:, 0]
                 if self.itm_head is not None:
                     itm_output = self.itm_head(itm_output)
-                if self.mlm_ssl_T_head is not None:
-                    itm_output = self.mlm_ssl_T_head(itm_output)
+
             else:
                 all_cls_emb = output['last_hidden_state'][:, 0]
                 itm_output = self.itm_head(all_cls_emb)
@@ -129,7 +126,7 @@ class CloverFinetune(BaseRecognizer):
 
         return losses
 
-
+    
     def forward_test(self, imgs, token_ids=None, segment_ids=None, input_mask=None, ans_ids=None, ans_mask=None, **kwargs):
         """Defines the computation performed at every call when evaluation and
         testing."""
@@ -192,7 +189,7 @@ class CloverFinetune(BaseRecognizer):
             
             itm_output_all = {}
             itm_output_all['result'] = qa_output.to(torch.float32)
-       
+            itm_output_all['attention'] = output['attentions'][-1].mean(dim=1)
         
         else:
             raise NotImplementedError("not implement the finetune test method")

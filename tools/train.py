@@ -18,7 +18,7 @@ from mmaction.core.hooks import ExpMomentumEMAHook, LinearMomentumEMAHook
 from mmaction import __version__
 from mmaction.models import build_model
 from mmaction.utils import collect_env, register_module_hooks, get_root_logger
-from mmaction.core.hooks import MyEvalHook, MyDistEvalHook, multi_gpu_test
+from mmaction.core.hooks import MyEvalHook, MyDistEvalHook
 from mmaction.core.runner import MyEpochBasedRunner as Runner
 from mmaction.datasets import build_dataset, build_dataloader
 from mmcv.runner.dist_utils import _init_dist_pytorch, _init_dist_slurm, _init_dist_mpi
@@ -254,67 +254,6 @@ def train_model(model,
     runner_kwargs = dict()
 
     runner.run(data_loaders, cfg.workflow, cfg.total_epochs, **runner_kwargs)
-
-    if test['test_last'] or test['test_best']:
-        best_ckpt_path = None
-        if test['test_best']:
-            if hasattr(eval_hook, 'best_ckpt_path'):
-                best_ckpt_path = eval_hook.best_ckpt_path
-
-            if best_ckpt_path is None or not osp.exists(best_ckpt_path):
-                test['test_best'] = False
-                if best_ckpt_path is None:
-                    runner.logger.info('Warning: test_best set as True, but '
-                                       'is not applicable '
-                                       '(eval_hook.best_ckpt_path is None)')
-                else:
-                    runner.logger.info('Warning: test_best set as True, but '
-                                       'is not applicable (best_ckpt '
-                                       f'{best_ckpt_path} not found)')
-                if not test['test_last']:
-                    return
-
-        test_cfg = copy.deepcopy(cfg.data.test)
-        test_cfg.update(dict(world_size=world_size, rank=rank,
-                             prefetch_cuda_id=torch.cuda.current_device(), shuffle=False,
-                             dataset_split_num=1, preprocess_num_workers=1))
-        test_dataset = build_dataset(test_cfg, dict(test_mode=True))
-        gpu_collect = cfg.get('evaluation', {}).get('gpu_collect', False)
-        tmpdir = cfg.get('evaluation', {}).get('tmpdir',
-                                               osp.join(cfg.work_dir, 'tmp'))
-
-        names, ckpts = [], []
-
-        if test['test_last']:
-            names.append('last')
-            ckpts.append(None)
-        if test['test_best']:
-            names.append('best')
-            ckpts.append(best_ckpt_path)
-
-        for name, ckpt in zip(names, ckpts):
-            if ckpt is not None:
-                runner.load_checkpoint(ckpt)
-
-            outputs = multi_gpu_test(runner.model, test_dataset, tmpdir,
-                                     gpu_collect)
-            if rank == 0:
-                out = osp.join(cfg.work_dir, f'{name}_pred.pkl')
-                test_dataset.dump_results(outputs, out)
-
-                eval_cfg = cfg.get('evaluation', {})
-                for key in [
-                        'interval', 'tmpdir', 'start', 'gpu_collect',
-                        'save_best', 'rule', 'by_epoch', 'broadcast_bn_buffers'
-                ]:
-                    eval_cfg.pop(key, None)
-
-                eval_res = test_dataset.evaluate(outputs, **eval_cfg)
-                runner.logger.info(f'Testing results of the {name} checkpoint')
-                for metric_name, val in eval_res.items():
-                    runner.logger.info(f'{metric_name}: {val:.04f}')
-        test_dataset.terminate()
-
 
 
 def main():

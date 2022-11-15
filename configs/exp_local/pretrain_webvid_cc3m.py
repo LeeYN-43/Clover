@@ -7,7 +7,7 @@ _base_ = [
 weight_decay = 0.005
 videos_per_gpu = 32
 num_gpus = 8
-machines = 8
+machines = 4
 num_frames = 8
 base_lr = 5e-5 / (videos_per_gpu * num_gpus * machines)
 multi_class = False
@@ -82,6 +82,7 @@ model = dict(
             type='NCEHeadForText',
             cross_in_channels=768,
             vts_embed_dim=768,
+            text_bn=False,
             dropout_ratio=0.1,
         ),
     ),

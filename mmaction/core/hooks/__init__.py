@@ -5,8 +5,8 @@ from .ema import ExpMomentumEMAHook, LinearMomentumEMAHook
 
 try:
     from .my_eval_hook import MyEvalHook, MyDistEvalHook, \
-                                    single_gpu_test, multi_gpu_test, single_gpu_test_retrieval, multi_gpu_test_retrieval_varied, \
-                                    multi_gpu_test_retrieval, multi_gpu_test_itm_finetune
+                                    multi_gpu_test_retrieval_varied, \
+                                    multi_gpu_test_retrieval, multi_gpu_test_itm_finetune, multi_gpu_test_action_recognition
 except Exception as e:
     print(e)
 

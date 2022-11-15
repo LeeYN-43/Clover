@@ -1605,6 +1605,11 @@ class DecordDecode:
         del container
         # gc.collect()
         results['imgs'] = imgs
+    
+        # import copy
+        # raw_imgs = copy.deepcopy(results['imgs'])
+        # results['raw_imgs'] = raw_imgs
+        
         results['original_shape'] = imgs[0].shape[:2]
         results['img_shape'] = imgs[0].shape[:2]
 

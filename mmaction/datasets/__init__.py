@@ -4,7 +4,7 @@ from .blending_utils import (BaseMiniBatchBlending, CutmixBlending,
 from .builder import (BLENDINGS, DATASETS, PIPELINES, build_dataloader,
                       build_dataset)
 
-from .video_dataset import VideoDataset, PKLVideoDataset, WebVidDataset, CC3MDataset
+from .video_dataset import *
 
 from .mixup import Mixup
 

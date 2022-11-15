@@ -8,7 +8,7 @@ from mmaction.utils import hload_pkl
 import copy
 from .base import BaseDataset
 from .builder import DATASETS
-from mmaction.core.evaluation.accuracy import recall_for_video_text_retrieval_varied, recall_for_video_text_retrieval, acc_for_msrvtt_mc
+from mmaction.core.evaluation.accuracy import recall_for_video_text_retrieval_varied, recall_for_video_text_retrieval, acc_for_msrvtt_mc, recall_for_zeroshot_action_recognition
  
 
 @DATASETS.register_module()
@@ -120,27 +120,28 @@ class MsrvttVideoDataset(PKLVideoDataset):
 
         video_infos = []
         for i, video_info in enumerate(ann_info):
-            frame_dir = video_info['filename']
-            filename = osp.join(self.data_prefix, video_info['filename']+'.mp4') 
-            video_info['filename'] = filename
-            video_info['frame_dir'] = frame_dir
-            video_info['index'] = i
-            video_info['label'] = -1 if 'answer_idx' not in video_info else video_info['answer_idx']
-      
             if isinstance(video_info['text'], str):
-                video_info['text'] = [video_info['text']] 
-            else:
-                if not self.is_mc and not self.is_qa:
-                    video_info['text'] = [rnd.choice(video_info['text'])]
+                video_info['text'] = [video_info['text']]
+            for text in video_info['text']:
+                info = {}
+                frame_dir = video_info['filename']
+                filename = osp.join(self.data_prefix, video_info['filename']+'.mp4') 
+                info['filename'] = filename
+                info['frame_dir'] = frame_dir
+                info['index'] = i
+                info['label'] = -1 if 'answer_idx' not in video_info else video_info['answer_idx']
+                info['text'] = [text]
+                if self.is_ret:
+                    pass
                 elif self.is_mc:
-                    video_info['clip_text_candidate'] = [0, 1, 2, 3, 4]
-                elif self.is_ret:
-                    video_info['clip_text_candidate'] = list(range(len(video_info['text'])))
-            video_infos.append(video_info) 
+                    info['clip_text_candidate'] = [0, 1, 2, 3, 4]
+                elif self.is_qa:
+                    pass
+                video_infos.append(info) 
         del ann_info
 
         return video_infos
-            
+           
     def evaluate(self, results, metrics='recall_for_video_text_retrieval', metric_options=None, logger=None, normalize=False, **deprecated_kwargs):
         '''Evaluate the dataset with
             Retrieval / video QA / classification / video caption ?
@@ -238,7 +239,7 @@ class MsrvttVideoDataset(PKLVideoDataset):
 
 
 @DATASETS.register_module()
-class MsvdDataset(MsrvttVideoDataset):
+class MsvdVideoDataset(MsrvttVideoDataset):
     def __init__(self, is_qa=False, test_ret=False, **kwargs):
         self.is_qa = is_qa
         self.test_ret = test_ret
@@ -251,6 +252,8 @@ class MsvdDataset(MsrvttVideoDataset):
 
         video_infos = []
         for i, video_info in enumerate(ann_info):
+            filename = osp.join(self.data_prefix, video_info['filename']+'.avi') 
+            video_info['filename'] = filename
             frame_dir = video_info['filename']
             video_info['frame_dir'] = frame_dir 
             video_info['index'] = i
@@ -435,3 +438,76 @@ class CC3MDataset(WebVidDataset):
         results['img_info'] = {'filename': filename}
 
         return self.pipeline(results)
+
+
+@DATASETS.register_module()
+class UCF101VideoDataset(PKLVideoDataset):
+
+    def __init__(self, is_mc=False, is_qa=False, is_ret=False, **kwargs):
+        self.is_mc = is_mc
+        self.is_qa = is_qa
+        self.is_ret = is_ret
+        super().__init__(**kwargs)
+
+    def load_annotations(self):
+        """Load annotation file to get video information."""
+        assert self.ann_file.endswith('.pkl')
+        ann_info = hload_pkl(self.ann_file)
+
+        video_infos = []
+        for i, video_info in enumerate(ann_info):
+            frame_dir = video_info['filename']
+            video_info['filename'] = osp.join(self.data_prefix, video_info['filename'])
+            video_info['frame_dir'] = frame_dir
+            video_info['index'] = i
+      
+            video_info['text'] = [video_info['text']] 
+            video_infos.append(video_info) 
+        del ann_info
+
+        return video_infos
+            
+    def evaluate(self, results, metrics='zeroshot_action_recognition', metric_options=None, logger=None, normalize=False, **deprecated_kwargs):
+
+        if deprecated_kwargs != {}:
+            warnings.warn(f'Unrecognized parameters: {deprecated_kwargs}')
+
+        if isinstance(metrics, str):
+            metrics = [metrics]
+        else:
+            metrics = metrics
+
+
+        eval_results = {}
+        for metric in metrics:
+            if metric == 'zeroshot_action_recognition':
+                all_video_embd = results['video_embd']
+                all_text_embd = results['text_embd']
+                labels = results['labels']
+                
+                unique_text_embd_dict = {}
+                for k, v in zip(labels, all_text_embd):
+                    if k not in unique_text_embd_dict:
+                        unique_text_embd_dict[k] = v
+
+                unique_text_embd = [v for k, v in unique_text_embd_dict.items()]
+
+                
+                metas = results.get('metas', None)
+                video_embd = np.stack(all_video_embd, axis=0)
+                text_embd = np.stack(unique_text_embd, axis=0)
+                labels = np.array(labels)
+
+
+
+
+                eval_results = recall_for_zeroshot_action_recognition(video_embd, text_embd, use_sim=True, labels=labels)
+ 
+            elif metric == 'acc_for_val':
+                scores, ans = results[0], results[1]
+                scores, ans = torch.stack(scores), torch.stack(ans)
+                scores = torch.argmax(scores, dim=-1)
+                acc =  (scores == ans).float().mean().item()
+                eval_results['acc'] = acc
+
+        return eval_results

@@ -16,7 +16,7 @@ from mmaction.core.hooks.fp16_utils import wrap_fp16_model
 from mmaction.datasets import build_dataset, build_dataloader
 from mmaction.models import build_model
 from mmaction.utils import register_module_hooks
-from mmaction.core.hooks import (single_gpu_test, multi_gpu_test, single_gpu_test_retrieval, multi_gpu_test_retrieval_varied,
+from mmaction.core.hooks import (multi_gpu_test_retrieval_varied, multi_gpu_test_action_recognition,
                                  multi_gpu_test_retrieval, multi_gpu_test_itm_finetune)
 from mmaction.utils.my_io import hlist_files
 
@@ -85,14 +85,6 @@ def parse_args():
         default='none',
         help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
-    parser.add_argument(
-        '--onnx',
-        action='store_true',
-        help='Whether to test with onnx model or not')
-    parser.add_argument(
-        '--tensorrt',
-        action='store_true',
-        help='Whether to test with TensorRT engine or not')
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -153,29 +145,24 @@ def inference_pytorch(args, cfg, distributed, data_loader):
         model = fuse_conv_bn(model)
     outputs = {}
     print(distributed, args.checkpoint)
-    if not distributed:
-        model = MMDataParallel(model, device_ids=[0])
-        if len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval':
-            outputs[args.checkpoint] = single_gpu_test_retrieval(model, data_loader)
-        else:
-            outputs[args.checkpoint] = single_gpu_test(model, data_loader)
-    else:
-        model = MMDistributedDataParallel(
-            model.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False)
-        if len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval':
-            outputs[args.checkpoint] = multi_gpu_test_retrieval(model, data_loader, args.tmpdir,
-                                 args.gpu_collect)   
-        elif len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval_varied':
-            outputs[args.checkpoint] = multi_gpu_test_retrieval_varied(model, data_loader, args.tmpdir,
-                                 args.gpu_collect)       
-        elif len(args.eval) == 1 and args.eval[0].startswith('video_qa'):
-            outputs[args.checkpoint] = multi_gpu_test_itm_finetune(model, data_loader, args.tmpdir,
-                                 args.gpu_collect)
-        else:
-            outputs[args.checkpoint] = multi_gpu_test(model, data_loader, args.tmpdir,
-                                 args.gpu_collect)
+
+    model = MMDistributedDataParallel(
+        model.cuda(),
+        device_ids=[torch.cuda.current_device()],
+        broadcast_buffers=False)
+    if len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval':
+        outputs[args.checkpoint] = multi_gpu_test_retrieval(model, data_loader, args.tmpdir,
+                                args.gpu_collect)   
+    elif len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval_varied':
+        outputs[args.checkpoint] = multi_gpu_test_retrieval_varied(model, data_loader, args.tmpdir,
+                                args.gpu_collect)       
+    elif len(args.eval) == 1 and args.eval[0].startswith('video_qa'):
+        outputs[args.checkpoint] = multi_gpu_test_itm_finetune(model, data_loader, args.tmpdir,
+                                args.gpu_collect)
+    elif len(args.eval) == 1 and args.eval[0] == 'zeroshot_action_recognition':
+        outputs[args.checkpoint] = multi_gpu_test_action_recognition(model, data_loader, args.tmpdir,
+                                args.gpu_collect) 
+
     
     return outputs
 
@@ -220,29 +207,19 @@ def inference_pytorch_multi_checkpoints(args, cfg, distributed, data_loader):
         if args.fuse_conv_bn:
             model = fuse_conv_bn(model)
 
-        if not distributed:
-            model = MMDataParallel(model, device_ids=[0])
-            if len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval':
-                outputs[checkpoint_path] = single_gpu_test_retrieval(model, data_loader)
-            else:
-                outputs[checkpoint_path] = single_gpu_test(model, data_loader)
-        else:
-            model = MMDistributedDataParallel(
-                model.cuda(),
-                device_ids=[torch.cuda.current_device()],
-                broadcast_buffers=False)
-            if len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval':
-                outputs[checkpoint_path] = multi_gpu_test_retrieval(model, data_loader, args.tmpdir,
-                                    args.gpu_collect)
-            elif len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval_varied':
-                outputs[checkpoint_path] = multi_gpu_test_retrieval_varied(model, data_loader, args.tmpdir,
-                                    args.gpu_collect)  
-            elif len(args.eval) == 1 and args.eval[0].startswith('video_qa'):
-                outputs[args.checkpoint] = multi_gpu_test_itm_finetune(model, data_loader, args.tmpdir,
-                                    args.gpu_collect)
-            else:
-                outputs[checkpoint_path] = multi_gpu_test(model, data_loader, args.tmpdir,
-                                    args.gpu_collect)
+        model = MMDistributedDataParallel(
+            model.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False)
+        if len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval':
+            outputs[checkpoint_path] = multi_gpu_test_retrieval(model, data_loader, args.tmpdir,
+                                args.gpu_collect)
+        elif len(args.eval) == 1 and args.eval[0] == 'recall_for_video_text_retrieval_varied':
+            outputs[checkpoint_path] = multi_gpu_test_retrieval_varied(model, data_loader, args.tmpdir,
+                                args.gpu_collect)  
+        elif len(args.eval) == 1 and args.eval[0].startswith('video_qa'):
+            outputs[args.checkpoint] = multi_gpu_test_itm_finetune(model, data_loader, args.tmpdir,
+                                args.gpu_collect)
 
     return outputs
 
@@ -253,9 +230,6 @@ def inference_pytorch_multi_checkpoints(args, cfg, distributed, data_loader):
 def main():
     args = parse_args()
     print(args.eval)
-    if args.tensorrt and args.onnx:
-        raise ValueError(
-            'Cannot set onnx mode and tensorrt mode at the same time.')
 
     cfg = Config.fromfile(args.config)
 

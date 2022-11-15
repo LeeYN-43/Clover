@@ -33,7 +33,6 @@ class CloverPretrain(BaseRecognizer):
         self.text_backbone = build_backbone(text_backbone)
         self.text_vocab_size = text_vocab_size
         self.loss_func = build_loss(loss_type)
-
         self.use_Cmask = use_Cmask
 
         self.mlm_head = build_head(mlm_head) if mlm_head is not None else None
@@ -95,18 +94,15 @@ class CloverPretrain(BaseRecognizer):
         losses = dict()
         # --------------  nce loss ------------------- #
         if hasattr(self, 'ssl_head'):
-            # visual_token_ssl = visual_token.clone()
             input_ssl_ids = torch.where(mlm_label == -100, token_ids.clone(), mlm_label.clone())
-            # input_ssl_ids = token_ids.clone()
             input_ssl_mask = text_input_mask.clone()
             text_only_out = self.text_backbone(input_ssl_ids, input_ssl_mask)
+            #  ------------   complete T -------------- #
             text_out_no_mask = text_only_out['last_hidden_state']
             visual_emb, text_emb = self.ssl_head(visual_token, text_out_no_mask, input_ssl_mask, input_ssl_ids)
-            if not hasattr(self.ssl_loss, "use_rank"):
-                nce_loss = self.ssl_loss(visual_emb, text_emb)
-                losses['nce_loss'] = nce_loss
 
 
+        #  ------------ complete V ---------------- #
         visual_token = visual_token.view(B, D, T, -1).permute(0, 2, 3, 1)
 
 
@@ -114,8 +110,19 @@ class CloverPretrain(BaseRecognizer):
         text_out_with_mask = self.text_backbone(token_ids, text_input_mask)
         text_out_last_hidden_state = text_out_with_mask['last_hidden_state']
 
-        mlm_output = self.multimodal_backbone(visual_token=visual_token, text_input_mask=text_input_mask, text_input_embeds=text_out_last_hidden_state)
-        t_last_hidden_state = mlm_output['t_last_hidden_state']
+        # ---------- forward mask v input ------------ #
+        visual_token_with_mask, v_mask = self.extract_visual_feat(imgs.clone(), v_token_mask) # b, d, T, h, w
+        visual_token_mask = visual_token_with_mask.view(B, D, T, -1).permute(0, 2, 3, 1)
+        
+        v_fusion_output = self.multimodal_backbone(visual_token=visual_token_mask, text_input_mask=text_input_mask.clone(), text_input_embeds=text_out_no_mask.clone())
+        
+        t_fusion_output = self.multimodal_backbone(visual_token=visual_token, text_input_mask=text_input_mask, text_input_embeds=text_out_last_hidden_state)
+        # for mlm #
+        t_last_hidden_state = t_fusion_output['t_last_hidden_state']
+
+
+
+
 
         # ------------ MLM loss ------------ #
 
@@ -137,29 +144,21 @@ class CloverPretrain(BaseRecognizer):
 
 
         #  -------  Tri-modal alignment with mask sample and ranking  --------- #
-        if self.mlm_ssl_T_head is not None:
-            mlm_word_feat = t_last_hidden_state[:, 0]
-            mask_word_recon_emb = self.mlm_ssl_T_head(mlm_word_feat)
+        if self.mlm_ssl_V_head is not None:
+            mlm_visual_feat = v_fusion_output['t_last_hidden_state'][:, 0]
+            mask_visual_recon_emb = self.mlm_ssl_V_head(mlm_visual_feat)
             mask_word_emb = self.ssl_head.forward_text(text_out_last_hidden_state) if self.use_Cmask else None
-            loss_cvt_rank = self.ssl_loss(visual_emb, text_emb, mask_word_emb, mask_word_recon_emb)
+            loss_cvt_rank = self.ssl_loss(visual_emb, text_emb, mask_word_emb, mask_visual_recon_emb)
             losses.update(loss_cvt_rank)
 
 
         if self.symmetry_rank:
-            # ------------- Forward mask imgs ---------------- #
-            visual_token_with_mask, v_mask = self.extract_visual_feat(imgs.clone(), v_token_mask) # b, d, T, h, w
-            mask_visual_emb = self.ssl_head.forward_vision(visual_token_with_mask) if self.use_Cmask else None
-            visual_token_mask = visual_token_with_mask.view(B, D, T, -1).permute(0, 2, 3, 1)
-            v_mlm_output = self.multimodal_backbone(visual_token=visual_token_mask, text_input_mask=text_input_mask.clone(), text_input_embeds=text_out_no_mask.clone())
-            if self.mlm_ssl_V_head is not None:
-                mlm_visual_feat = v_mlm_output['v_last_hidden_state']
-                mask_visual_recon_emb = self.mlm_ssl_V_head(mlm_visual_feat)
-            else:
-                mlm_visual_feat = v_mlm_output['t_last_hidden_state'][:, 0]
-                mask_visual_recon_emb = self.mlm_ssl_T_head(mlm_visual_feat)
+            mlm_word_feat = t_last_hidden_state[:, 0]
+            mask_word_recon_emb = self.mlm_ssl_T_head(mlm_word_feat)
 
-                
-            loss_ctv_rank = self.ssl_loss(text_emb, visual_emb, mask_visual_emb, mask_visual_recon_emb)
+            mask_visual_emb = self.ssl_head.forward_vision(visual_token_with_mask) if self.use_Cmask else None
+      
+            loss_ctv_rank = self.ssl_loss(text_emb, visual_emb, mask_visual_emb, mask_word_recon_emb)
             loss_ctv_rank['v_nce_loss'] = loss_ctv_rank.pop('nce_loss')
             
             if self.ssl_loss.use_rank:

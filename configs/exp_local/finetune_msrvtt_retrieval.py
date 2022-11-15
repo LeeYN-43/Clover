@@ -5,7 +5,7 @@ _base_ = [
 ]
 # model settings
 weight_decay = 0.01
-videos_per_gpu = 32
+videos_per_gpu = 16
 num_gpus = 8
 machines = 1
 num_frames = 8

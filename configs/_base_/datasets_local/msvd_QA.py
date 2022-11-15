@@ -5,13 +5,13 @@ num_frames = 8
 multi_class = False
 multi_view_test = False
 data_root = '/home/lyn/datassd/Video/MSVD/'
-dataset_type = 'MsrvttVideoDataset'
+dataset_type = 'MsvdVideoDataset'
 ann_file_train = data_root + 'msvd_qa_train.pkl'
 ann_file_test = data_root + 'msvd_qa_test.pkl'
 train_key_prefixes = None
-train_data_paths = data_root + 'all'
+train_data_paths = data_root + 'YouTubeClips'
 test_key_prefixes = None
-test_data_paths = data_root + 'all'
+test_data_paths = data_root + 'YouTubeClips'
 pretrained_texttokenizer='bert-base-uncased'
 img_norm_cfg = dict(
     mean=[103.53, 116.28, 123.675], std=[57.375, 57.12, 58.395], to_rgb=False)  
