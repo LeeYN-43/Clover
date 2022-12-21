@@ -2,7 +2,7 @@
 
 Offical PyTorch implementation of Clover: Towards A Unified Video-Language Alignment and Fusion Model
 [**[arXiv]**](https://arxiv.org/abs/2207.07885)
-![Overview](figures/method9.png)
+![Overview](figures/overview.png)
 
 
 # Update
@@ -26,7 +26,7 @@ If you find this work useful in your research, please consider cite:
 
     @article{huang2022clover,
     title={Clover: Towards A Unified Video-Language Alignment and Fusion Model},
-    author={Huang, Jingjia and Li, Yinan and Feng, Jiashi and Sun, Xiaoshuai and Ji, Rongrong},
+    author={Huang, Jingjia and Li, Yinan and Feng, Jiashi, Xinglong Wu, Sun, Xiaoshuai and Ji, Rongrong},
     journal={arXiv preprint arXiv:2207.07885},
     year={2022}
     }
