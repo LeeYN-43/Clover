@@ -458,18 +458,7 @@ def recall_for_video_text_retrieval(video_embd=None, text_embd=None, input_score
     metrics['Recall@all'] = metrics['Recall@1'] + metrics['Recall@5'] + metrics['Recall@10'] - metrics['MR']
 
 
-    # if texts is not None:
-        # best10 = scores
-        # with open("/home/lyn/nips/re/clover_msrvtt_test_scores_norm_nosim.npy", 'wb') as f:
-            # np.save(f, best10)
-        # with open("/home/lyn/nips/re/clover_msrvtt_test_video_text.pkl", 'wb') as f:
-            # pickle.dump(texts, f)
-    # not in use
-    # max_idx = np.argmax(scores, axis=1)
-    # error = []
-    # for ex_idx in range(20):
-    #     error.append((texts[ex_idx], texts[max_idx[ex_idx]]))
-    # metrics["error"] = error
+
     return metrics 
 
 
@@ -533,6 +522,24 @@ def recall_for_video_text_retrieval_varied(video_embd, text_embd, tid):
     # print(metrics["error"])
     return metrics
 
+
+def recall_for_zeroshot_action_recognition(video_embd=None, text_embd=None, use_sim=False, labels=None):
+    '''
+    add by lyn
+    follow mil-nce to compute msrvtt video-text retrieval R1 R5 R10 medR
+    args:
+        video_embd: N, D
+        text_embd:  N, D
+    '''
+
+    scores = sim_matrix(video_embd, text_embd).cpu().numpy()
+
+    sx = np.argsort(-scores, axis=1)
+    ind = np.where(sx[:, 0] + 1 == labels[:len(sx)])[0]
+    metrics = {}
+    metrics['top-1 acc'] = float(len(ind)) / len(sx) * 100  # 百分比
+
+    return metrics
 
 
 def recall_at_precision(scores, labels, prec_thres=0.9):
